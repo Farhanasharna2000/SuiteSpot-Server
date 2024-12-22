@@ -101,6 +101,29 @@ async function run() {
       res.send(result)
     })
 
+    //post booking data in db
+    app.post('/add-booking', async (req, res) => {
+      const bookingData = req.body;
+      const { roomNo, status } = bookingData; // Assuming `roomNo` is the identifier for the room
+  
+      try {
+          // Insert booking data into bookingsCollection
+          const bookingResult = await bookingsCollection.insertOne(bookingData);
+  
+          // Update the status of the room in roomsCollection
+          const roomUpdateResult = await roomsCollection.updateOne(
+              { roomNo: roomNo }, // Filter by room number
+              { $set: { status: status } } // Update the status field
+          );
+  
+          res.send({ bookingResult, roomUpdateResult });
+      } catch (err) {
+          console.error('Error processing booking:', err);
+          res.status(500).send({ error: 'Failed to process booking', details: err.message });
+      }
+  });
+  
+ 
     
     // Send a ping to confirm a successful connection
     // await client.db('admin').command({ ping: 1 })
