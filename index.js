@@ -123,7 +123,26 @@ async function run() {
       }
   });
   
+ //get all bookings posted by a specific user
+ app.get('/bookings/:email',verifyToken, async (req, res) => {
+  const email = req.params.email;
+  const decodedEmail=req.user?.email;
+
+  console.log('email from token',decodedEmail);
+  console.log('email from params',email);
+  
+  if(decodedEmail!==email){
+    return res.status(403).send({message:'forbidden access'})
+  }
+  const query = {  email }
  
+  const result = await bookingsCollection.find(query).toArray()
+  res.send(result)
+})
+    
+  
+  
+    
     
     // Send a ping to confirm a successful connection
     // await client.db('admin').command({ ping: 1 })
