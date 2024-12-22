@@ -83,6 +83,16 @@ async function run() {
       res.send(result)
     })
     
+    //get featured data from db
+    app.get('/featured-rooms', async (req, res) => {
+      try {
+        const result = await roomsCollection.find().sort({ price: -1 }).limit(6).toArray();
+        res.send(result);
+      } catch (error) {
+        res.status(500).send({ message: 'Error fetching rooms', error });
+      }
+    });
+    
     // Send a ping to confirm a successful connection
     // await client.db('admin').command({ ping: 1 })
     console.log(
