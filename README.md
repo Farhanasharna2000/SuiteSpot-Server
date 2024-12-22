@@ -1,4 +1,4 @@
-# VisaZen Server-Side   
+# SuiteSpot Server-Side   
 
 This project is built using **Node.js** and **Express** for the backend, with **MongoDB** as the database.  
 

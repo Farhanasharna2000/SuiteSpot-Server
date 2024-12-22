@@ -5,11 +5,13 @@ require('dotenv').config()
 const jwt = require('jsonwebtoken')
 const cookieParser=require('cookie-parser')
 
-const port = process.env.PORT || 9000
+const port = process.env.PORT || 3000
 const app = express()
 
 const corsOptions = {
-  origin: ['http://localhost:5173'], //live link o hbe akhane
+  origin: ['http://localhost:5174',
+   'http://localhost:5173'
+  ], //live link o hbe akhane
   credentials: true,
   optionalSuccessStatus: 200,
 }
@@ -47,6 +49,7 @@ jwt.verify(token,process.env.SECRET_KEY,(err,decoded)=>{
 async function run() {
   try {
     const roomsCollection = client.db('hotelDB').collection('rooms');
+    const bookingsCollection = client.db('hotelDB').collection('bookings'); 
 
     //generate jwt
     app.post('/jwt', async (req, res) => {
@@ -80,8 +83,6 @@ async function run() {
       res.send(result)
     })
     
-  
-
     // Send a ping to confirm a successful connection
     // await client.db('admin').command({ ping: 1 })
     console.log(
