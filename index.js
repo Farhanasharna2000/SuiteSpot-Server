@@ -224,6 +224,17 @@ app.post('/reviews', verifyToken, async (req, res) => {
   }
 });
 
+//get single room reviews
+app.get('/reviewDatas/:roomNo', async (req, res) => {
+  const roomNo =parseInt( req.params.roomNo ) ;
+
+  const query = {roomNo};
+ 
+  
+  const reviews = await reviewsCollection.find(query).toArray(); 
+
+  res.send(reviews);
+});
 
     
     // Send a ping to confirm a successful connection
