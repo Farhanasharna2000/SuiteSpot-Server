@@ -236,7 +236,30 @@ app.get('/reviewDatas/:roomNo', async (req, res) => {
   res.send(reviews);
 });
 
+         // Get all rooms data from db for filter
+
     
+app.get('/all-rooms', async (req, res) => {
+  try {
+    const filter = req.query.filter; 
+    const query = {}; 
+
+    
+    let options = {};
+    if (filter === 'asc' || filter === 'dsc') {
+      options.sort = { price: filter === 'asc' ? 1 : -1 }; 
+    }
+
+    
+    const result = await roomsCollection.find(query, options).toArray();
+
+    res.send(result);
+  } catch (error) {
+    console.error("Error fetching filtered rooms:", error);
+    res.status(500).send({ message: "An error occurred while fetching rooms." });
+  }
+});
+
     // Send a ping to confirm a successful connection
     // await client.db('admin').command({ ping: 1 })
     console.log(
