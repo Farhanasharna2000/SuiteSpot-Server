@@ -4,6 +4,7 @@ const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb')
 require('dotenv').config()
 const jwt = require('jsonwebtoken')
 const cookieParser=require('cookie-parser')
+const moment = require('moment');
 
 const port = process.env.PORT || 3000
 const app = express()
@@ -50,6 +51,7 @@ async function run() {
   try {
     const roomsCollection = client.db('hotelDB').collection('rooms');
     const bookingsCollection = client.db('hotelDB').collection('bookings'); 
+const reviewsCollection = client.db('hotelDB').collection('reviews'); 
 
     //generate jwt
     app.post('/jwt', async (req, res) => {
@@ -128,9 +130,7 @@ async function run() {
   const email = req.params.email;
   const decodedEmail=req.user?.email;
 
-  console.log('email from token',decodedEmail);
-  console.log('email from params',email);
-  
+ 
   if(decodedEmail!==email){
     return res.status(403).send({message:'forbidden access'})
   }
@@ -141,14 +141,90 @@ async function run() {
 })
     
     //delete a booking from db
-    app.delete('/booking/:id',verifyToken, async (req, res) => {
+    app.delete('/booking/:id', verifyToken, async (req, res) => {
       const id = req.params.id;
-      const query = { _id: new ObjectId(id) }
-      const result = await bookingsCollection.deleteOne(query)
-      res.send(result)
-    })
   
-    
+      try {
+          // Find the booking to retrieve the room number and check-in date
+          const booking = await bookingsCollection.findOne({ _id: new ObjectId(id) });
+  
+          if (!booking) {
+              return res.status(404).send({ message: 'Booking not found' });
+          }
+  
+          const roomNo = booking.roomNo;
+          const checkInDate = moment(booking.checkInDate); // Parse check-in date using moment.js
+          const currentDate = moment(); // Current date and time
+  
+          // Check if the cancellation is allowed (at least 1 day before check-in)
+          if (currentDate.isAfter(checkInDate.subtract(1, 'days'))) {
+               res.status(201).send({ message: 'Cancellation is not allowed within 1 day of the check-in date.' });
+          }else{
+            // Delete the booking
+          const deleteResult = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
+  
+          if (deleteResult.deletedCount === 0) {
+              return res.status(500).send({ message: 'Failed to delete booking' });
+          }
+  
+          // Update the room status to "Available" in roomsCollection
+          const updateResult = await roomsCollection.updateOne(
+              { roomNo: roomNo },
+              { $set: { status: 'Available' } }
+          );
+  
+          if (updateResult.matchedCount === 0) {
+              return res.status(500).send({ message: 'Failed to update room status' });
+          }
+  
+          // If all operations are successful, send the success response
+          res.status(200).send({ message: 'Booking deleted and room status updated successfully.' });
+          }
+  
+          
+      } catch (error) {
+          console.error('Error deleting booking:', error);
+          res.status(500).send({ message: 'Internal server error' });
+      }
+  });
+  
+
+
+   // POST review data in DB
+app.post('/reviews', verifyToken, async (req, res) => {
+  const reviewData = req.body;
+  const { roomNo, userEmail } = reviewData;
+
+  // Check if a review already exists
+  const query = { email: userEmail, roomNo: roomNo };
+  
+  try {
+    const alreadyExist = await reviewsCollection.findOne(query);
+    console.log('Query:', query);
+    console.log('Exist:', alreadyExist);
+
+    if (alreadyExist) {
+      return res.status(400).json({ message: 'You have already placed a review for this room.' });
+    }
+
+    // Insert the review
+    const result = await reviewsCollection.insertOne(reviewData);
+    console.log('Review inserted:', result);
+
+    // Increment review count in roomsCollection
+    const filter = { roomNo: roomNo };
+    const update = { $inc: { reviewCount: 1 } };
+    const updateResult = await roomsCollection.updateOne(filter, update);
+
+    console.log('Room updated:', updateResult);
+    res.json({ message: 'Review submitted successfully', result });
+  } catch (error) {
+    console.error('Error submitting review:', error);
+    res.status(500).json({ message: 'Internal server error' });
+  }
+});
+
+
     
     // Send a ping to confirm a successful connection
     // await client.db('admin').command({ ping: 1 })
