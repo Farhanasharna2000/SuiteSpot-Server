@@ -80,10 +80,36 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
         .send({ success: true })
     })
     //get all rooms data from db
+    // app.get('/rooms', async (req, res) => {
+    //   const result = await roomsCollection.find().toArray()
+    //   res.send(result)
+    // })
+
+    
     app.get('/rooms', async (req, res) => {
-      const result = await roomsCollection.find().toArray()
-      res.send(result)
-    })
+      try {
+        // Fetch all rooms
+        const rooms = await roomsCollection.find().toArray();
+    
+        const bookings = await bookingsCollection.find().toArray();
+    
+        const roomsWithBookings = rooms.map(room => {
+          const roomBookings = bookings.filter(booking => booking.roomNo === room.roomNo);
+    
+          // Add booking info to the room object
+          room.bookings = roomBookings.map(booking => ({
+            checkInDate: booking.checkInDate,
+            checkOutDate: booking.checkOutDate
+          }));
+          return room;
+        });
+        // Send rooms with the bookings data
+        res.send(roomsWithBookings);
+      } catch (error) {
+        console.error('Error fetching rooms and bookings:', error);
+        res.status(500).send('Error fetching rooms and bookings');
+      }
+    });
     
     //get featured data from db
     app.get('/featured-rooms', async (req, res) => {
@@ -106,24 +132,40 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
     //post booking data in db
     app.post('/add-booking', async (req, res) => {
       const bookingData = req.body;
-      const { roomNo, status } = bookingData; // Assuming `roomNo` is the identifier for the room
+      const { roomNo, checkInDate, checkOutDate } = bookingData;
   
       try {
-          // Insert booking data into bookingsCollection
+          // Parse dates with Moment.js
+          const checkIn = moment(checkInDate);
+          const checkOut = moment(checkOutDate);
+  
+          // Check for overlapping bookings
+          const existingBooking = await bookingsCollection.findOne({
+              roomNo: roomNo,
+              $or: [
+                  {
+                      $and: [
+                          { checkInDate: { $lte: checkOut.toISOString() } },
+                          { checkOutDate: { $gte: checkIn.toISOString() } }
+                      ]
+                  }
+              ]
+          });
+  
+          if (existingBooking) {
+              // Return a conflict response if an overlap is found
+              return res.status(409).send({ message: "This date is already booked for this room" });
+          }
+  
+          // If no overlap, proceed with booking
           const bookingResult = await bookingsCollection.insertOne(bookingData);
-  
-          // Update the status of the room in roomsCollection
-          const roomUpdateResult = await roomsCollection.updateOne(
-              { roomNo: roomNo }, // Filter by room number
-              { $set: { status: status } } // Update the status field
-          );
-  
-          res.send({ bookingResult, roomUpdateResult });
+          res.send(bookingResult);
       } catch (err) {
           console.error('Error processing booking:', err);
           res.status(500).send({ error: 'Failed to process booking', details: err.message });
       }
   });
+  
   
  //get all bookings posted by a specific user
  app.get('/bookings/:email',verifyToken, async (req, res) => {
@@ -167,18 +209,8 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
               return res.status(500).send({ message: 'Failed to delete booking' });
           }
   
-          // Update the room status to "Available" in roomsCollection
-          const updateResult = await roomsCollection.updateOne(
-              { roomNo: roomNo },
-              { $set: { status: 'Available' } }
-          );
-  
-          if (updateResult.matchedCount === 0) {
-              return res.status(500).send({ message: 'Failed to update room status' });
-          }
-  
-          // If all operations are successful, send the success response
-          res.status(200).send({ message: 'Booking deleted and room status updated successfully.' });
+                 // If all operations are successful, send the success response
+          res.status(200).send({ message: 'Booking deleted  successfully.' });
           }
   
           
@@ -191,20 +223,20 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
 
 
    // POST review data in DB
-app.post('/reviews', verifyToken, async (req, res) => {
+ app.post('/reviews', verifyToken, async (req, res) => {
   const reviewData = req.body;
   const { roomNo, userEmail } = reviewData;
 
-  // Check if a review already exists
-  const query = { email: userEmail, roomNo: roomNo };
-  
   try {
+    // Check if a review already exists
+    const query = { userEmail: userEmail, roomNo: roomNo };
     const alreadyExist = await reviewsCollection.findOne(query);
-    console.log('Query:', query);
-    console.log('Exist:', alreadyExist);
+console.log(alreadyExist);
 
     if (alreadyExist) {
-      return res.status(400).json({ message: 'You have already placed a review for this room.' });
+     return  res
+        .status(201)
+        .send({ message: 'You have already placed a review for this room.' });
     }
 
     // Insert the review
@@ -217,12 +249,14 @@ app.post('/reviews', verifyToken, async (req, res) => {
     const updateResult = await roomsCollection.updateOne(filter, update);
 
     console.log('Room updated:', updateResult);
-    res.json({ message: 'Review submitted successfully', result });
+    res.send({ message: 'Review submitted successfully', result });
   } catch (error) {
     console.error('Error submitting review:', error);
-    res.status(500).json({ message: 'Internal server error' });
+    res.status(500).send({ message: 'Internal server error' });
   }
 });
+
+  
 
 //get single room reviews
 app.get('/reviewDatas/:roomNo', async (req, res) => {
@@ -236,7 +270,7 @@ app.get('/reviewDatas/:roomNo', async (req, res) => {
   res.send(reviews);
 });
 
-         // Get all rooms data from db for filter
+// Get all rooms data from db for filter
 
     
 app.get('/all-rooms', async (req, res) => {
@@ -260,6 +294,76 @@ app.get('/all-rooms', async (req, res) => {
   }
 });
 
+  //get review data from db
+  app.get('/top-reviews', async (req, res) => {
+    try {
+      const result = await reviewsCollection
+        .find()
+        .sort({ currentTime: -1 }) 
+        .toArray();
+      res.send(result);
+    } catch (error) {
+      res.status(500).send({ message: 'Error fetching reviews', error });
+    }
+  });
+
+//update booking date
+app.put('/update-date', async (req, res) => {
+  const updateData = req.body;
+  const { id, roomNo, checkInDate, checkOutDate } = updateData;
+
+  try {
+   
+
+const checkIn = moment(checkInDate);
+const checkOut = moment(checkOutDate);
+
+
+const existingBooking = await bookingsCollection.findOne({
+    roomNo: roomNo,
+    $or: [
+        {
+            $and: [
+                { checkInDate: { $lte: checkOut.toISOString() } },
+                { checkOutDate: { $gte: checkIn.toISOString() } }
+            ]
+        }
+    ]
+});
+
+console.log(existingBooking);
+
+if (existingBooking) {
+    
+    return res.status(201).send({ message: "This date is already booked for this room" });
+}
+
+
+    
+    const result = await bookingsCollection.updateOne(
+      { _id: new ObjectId(id) },
+      {
+        $set: {
+          checkInDate: checkInDate,
+          checkOutDate: checkOutDate,
+        },
+      }
+    );
+
+    // If the update is successful
+    if (result.modifiedCount > 0) {
+      res.status(200).send({ message: 'Booking dates updated successfully.' });
+    } else {
+      res.status(404).send({ message: 'Booking not found or no changes made.' });
+    }
+
+  } catch (error) {
+    console.error('Error updating booking dates:', error);
+    res.status(500).send({ message: 'Internal server error. Please try again later.' });
+  }
+});
+
+  
     // Send a ping to confirm a successful connection
     // await client.db('admin').command({ ping: 1 })
     console.log(
