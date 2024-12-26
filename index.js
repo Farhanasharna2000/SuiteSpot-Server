@@ -11,8 +11,10 @@ const app = express()
 
 const corsOptions = {
   origin: ['http://localhost:5174',
-   'http://localhost:5173'
-  ], //live link o hbe akhane
+   'http://localhost:5173',
+   'https://suitespot-719f8.web.app',
+   'https://suitespot-719f8.firebaseapp.com'
+  ],
   credentials: true,
   optionalSuccessStatus: 200,
 }
@@ -80,10 +82,6 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
         .send({ success: true })
     })
     //get all rooms data from db
-    // app.get('/rooms', async (req, res) => {
-    //   const result = await roomsCollection.find().toArray()
-    //   res.send(result)
-    // })
 
     
     app.get('/rooms', async (req, res) => {
@@ -308,7 +306,7 @@ app.get('/all-rooms', async (req, res) => {
   });
 
 //update booking date
-app.put('/update-date', async (req, res) => {
+app.put('/update-date',verifyToken, async (req, res) => {
   const updateData = req.body;
   const { id, roomNo, checkInDate, checkOutDate } = updateData;
 
