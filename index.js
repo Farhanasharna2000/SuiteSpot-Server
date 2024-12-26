@@ -273,24 +273,53 @@ app.get('/reviewDatas/:roomNo', async (req, res) => {
     
 app.get('/all-rooms', async (req, res) => {
   try {
-    const filter = req.query.filter; 
-    const query = {}; 
-
-    
-    let options = {};
+    const { filter, offer, fromDate, toDate } = req.query;
+    const query = {};
+    const options = {};
+    // Filter by price range
     if (filter === 'asc' || filter === 'dsc') {
-      options.sort = { price: filter === 'asc' ? 1 : -1 }; 
+      options.sort = { price: filter === 'asc' ? 1 : -1 };
+    }
+
+  
+    if (offer) {
+      query.discount =offer;
     }
 
     
-    const result = await roomsCollection.find(query, options).toArray();
+    
+    // Filter by date range (exclude booked rooms)
+    if (fromDate && toDate) {
+      const from = new Date(fromDate);
+      const to = new Date(toDate);
 
+      // Get bookings overlapping with the given date range
+      const bookedRooms = await bookingsCollection
+        .find({
+          $or: [
+            { checkInDate: { $lte: to, $gte: from } },
+            { checkOutDate: { $lte: to, $gte: from } },
+            { checkInDate: { $lte: from }, checkOutDate: { $gte: to } },
+          ],
+        })
+        .project({ roomNo: 1 })
+        .toArray();
+
+      const bookedRoomNos = bookedRooms.map((booking) => booking.roomNo);
+      if (bookedRoomNos.length > 0) {
+        query.roomNo = { $nin: bookedRoomNos };
+      }
+    }
+
+    // Fetch the filtered rooms
+    const result = await roomsCollection.find(query, options).toArray();
     res.send(result);
   } catch (error) {
     console.error("Error fetching filtered rooms:", error);
     res.status(500).send({ message: "An error occurred while fetching rooms." });
   }
 });
+
 
   //get review data from db
   app.get('/top-reviews', async (req, res) => {
