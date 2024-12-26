@@ -24,7 +24,7 @@ app.use(cookieParser());
 
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.zlou2.mongodb.net/?retryWrites=true&w=majority&appName=Cluster0`;
 
-// Create a MongoClient with a MongoClientOptions object to set the Stable API version
+
 const client = new MongoClient(uri, {
   serverApi: {
     version: ServerApiVersion.v1,
@@ -36,7 +36,7 @@ const client = new MongoClient(uri, {
 //verifyToken
 const verifyToken = (req, res, next) => {
   const token = req.cookies?.token;
-  // console.log('token inside the verify token', token);
+  
 if(!token){
   return res.status(401).send({message:'Unauthorized access'})
 }
@@ -60,7 +60,7 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
       const email = req.body;
       //create token
       const token = jwt.sign(email, process.env.SECRET_KEY, { expiresIn: '365d' })
-      // console.log(token);
+      
       res
         .cookie('token', token, {
           httpOnly: true,
@@ -133,11 +133,11 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
       const { roomNo, checkInDate, checkOutDate } = bookingData;
   
       try {
-          // Parse dates with Moment.js
+         
           const checkIn = moment(checkInDate);
           const checkOut = moment(checkOutDate);
   
-          // Check for overlapping bookings
+        
           const existingBooking = await bookingsCollection.findOne({
               roomNo: roomNo,
               $or: [
@@ -151,11 +151,10 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
           });
   
           if (existingBooking) {
-              // Return a conflict response if an overlap is found
               return res.status(409).send({ message: "This date is already booked for this room" });
           }
   
-          // If no overlap, proceed with booking
+         
           const bookingResult = await bookingsCollection.insertOne(bookingData);
           res.send(bookingResult);
       } catch (err) {
@@ -185,7 +184,7 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
       const id = req.params.id;
   
       try {
-          // Find the booking to retrieve the room number and check-in date
+       
           const booking = await bookingsCollection.findOne({ _id: new ObjectId(id) });
   
           if (!booking) {
@@ -193,21 +192,22 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
           }
   
           const roomNo = booking.roomNo;
-          const checkInDate = moment(booking.checkInDate); // Parse check-in date using moment.js
-          const currentDate = moment(); // Current date and time
+          const checkInDate = moment(booking.checkInDate); 
+          const currentDate = moment();
   
           // Check if the cancellation is allowed (at least 1 day before check-in)
+
           if (currentDate.isAfter(checkInDate.subtract(1, 'days'))) {
                res.status(201).send({ message: 'Cancellation is not allowed within 1 day of the check-in date.' });
           }else{
-            // Delete the booking
+        
           const deleteResult = await bookingsCollection.deleteOne({ _id: new ObjectId(id) });
   
           if (deleteResult.deletedCount === 0) {
               return res.status(500).send({ message: 'Failed to delete booking' });
           }
   
-                 // If all operations are successful, send the success response
+               
           res.status(200).send({ message: 'Booking deleted  successfully.' });
           }
   
@@ -229,7 +229,7 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
     // Check if a review already exists
     const query = { userEmail: userEmail, roomNo: roomNo };
     const alreadyExist = await reviewsCollection.findOne(query);
-console.log(alreadyExist);
+
 
     if (alreadyExist) {
      return  res
@@ -239,14 +239,14 @@ console.log(alreadyExist);
 
     // Insert the review
     const result = await reviewsCollection.insertOne(reviewData);
-    console.log('Review inserted:', result);
+   
 
     // Increment review count in roomsCollection
     const filter = { roomNo: roomNo };
     const update = { $inc: { reviewCount: 1 } };
     const updateResult = await roomsCollection.updateOne(filter, update);
 
-    console.log('Room updated:', updateResult);
+    
     res.send({ message: 'Review submitted successfully', result });
   } catch (error) {
     console.error('Error submitting review:', error);
@@ -274,51 +274,51 @@ app.get('/reviewDatas/:roomNo', async (req, res) => {
 app.get('/all-rooms', async (req, res) => {
   try {
     const { filter, offer, fromDate, toDate } = req.query;
+
     const query = {};
     const options = {};
-    // Filter by price range
+
     if (filter === 'asc' || filter === 'dsc') {
       options.sort = { price: filter === 'asc' ? 1 : -1 };
     }
-
-  
     if (offer) {
-      query.discount =offer;
+      query.discount = offer;
     }
 
-    
-    
-    // Filter by date range (exclude booked rooms)
     if (fromDate && toDate) {
-      const from = new Date(fromDate);
-      const to = new Date(toDate);
-
-      // Get bookings overlapping with the given date range
-      const bookedRooms = await bookingsCollection
-        .find({
-          $or: [
-            { checkInDate: { $lte: to, $gte: from } },
-            { checkOutDate: { $lte: to, $gte: from } },
-            { checkInDate: { $lte: from }, checkOutDate: { $gte: to } },
-          ],
-        })
+         const checkIn = moment(fromDate);
+          const checkOut = moment(toDate);
+  
+          const existingBooking = await bookingsCollection.find({
+              $or: [
+                  {
+                      $and: [
+                          { checkInDate: { $lte: checkOut.toISOString() } },
+                          { checkOutDate: { $gte: checkIn.toISOString() } }
+                      ]
+                  }
+              ]
+          })
         .project({ roomNo: 1 })
         .toArray();
-
-      const bookedRoomNos = bookedRooms.map((booking) => booking.roomNo);
-      if (bookedRoomNos.length > 0) {
-        query.roomNo = { $nin: bookedRoomNos };
+  
+      const bookedRoomNumbers = existingBooking.map((booking) => booking.roomNo);
+      
+      
+      if (bookedRoomNumbers.length > 0) {
+        query.roomNo = { $nin: bookedRoomNumbers }; 
       }
     }
 
-    // Fetch the filtered rooms
+    // Fetch filtered rooms
     const result = await roomsCollection.find(query, options).toArray();
     res.send(result);
   } catch (error) {
-    console.error("Error fetching filtered rooms:", error);
-    res.status(500).send({ message: "An error occurred while fetching rooms." });
+    console.error('Error fetching filtered rooms:', error);
+    res.status(500).send({ message: 'An error occurred while fetching rooms.' });
   }
 });
+
 
 
   //get review data from db
@@ -358,7 +358,7 @@ const existingBooking = await bookingsCollection.findOne({
     ]
 });
 
-console.log(existingBooking);
+
 
 if (existingBooking) {
     
