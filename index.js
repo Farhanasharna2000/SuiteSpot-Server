@@ -114,7 +114,7 @@ const reviewsCollection = client.db('hotelDB').collection('reviews');
     //get featured data from db
     app.get('/featured-rooms', async (req, res) => {
       try {
-        const result = await roomsCollection.find().sort({ price: -1 }).limit(6).toArray();
+        const result = await roomsCollection.find().sort({ price: -1 }).limit(8).toArray();
         res.send(result);
       } catch (error) {
         res.status(500).send({ message: 'Error fetching rooms', error });
